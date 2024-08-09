@@ -15,7 +15,7 @@ let ``Create File`` () =
     let filePath = "testfile.txt"
     File.Delete (filePath)
 
-    pfm.createFile (filePath) |> ignore
+    pfm.createFile (filePath)
     Assert.True(File.Exists(filePath))
 
     File.Delete (filePath)
@@ -37,20 +37,57 @@ let ``Create File rbfm`` () =
     let filePath = "testfile.txt"
     File.Delete (filePath)
 
-    rbfm.createFile(filePath) |> ignore
+    rbfm.createFile(filePath)
     Assert.True(File.Exists(filePath))
 
     File.Delete (filePath)
 
 [<Fact>]
-let ``Insert Record`` () =
+let ``Insert Records`` () =
     let fileName = "testfile.txt"
-    let attributes = createTestRecordDescriptor()
-    let name = "John Doe"
-    printfn "%d" name.Length
-    let testRecord: Value array = [| String "John Doe"; Int 30; Float 5.9f; Int 10000 |]
-
     let rbfm = RecordBasedFileManager.Instance
-    let result = rbfm.insertRecord fileName attributes testRecord
+    let fileHandle = FileHandle(fileName)
+    File.Delete (fileName)
+
+    // Create record based file
+    rbfm.createFile(fileName)
+
+    let count = 10
+    let attributes = createTestRecordDescriptor()
+    let inputRecords = createSmallRecords (count)
+    let rids = Array.map (rbfm.insertRecord fileHandle attributes) inputRecords
+
+    let outputRecords = Array.map (rbfm.readRecord fileHandle attributes) rids
+
+    Assert.True(Array.forall2 compareTwoRecords inputRecords outputRecords)
+    printfn "All %A records successfully inserted and read" count
+
+    // Delete file
+    File.Delete (fileName)
+
+    ()
+
+[<Fact>]
+let ``Insert Many Records`` () =
+    let fileName = "testfile.txt"
+    let rbfm = RecordBasedFileManager.Instance
+    let fileHandle = FileHandle(fileName)
+    File.Delete (fileName)
+
+    // Create record based file
+    rbfm.createFile(fileName)
+
+    let count = 1000
+    let attributes = createTestRecordDescriptor()
+    let inputRecords = createSmallRecords (count)
+    let rids = Array.map (rbfm.insertRecord fileHandle attributes) inputRecords
+
+    let outputRecords = Array.map (rbfm.readRecord fileHandle attributes) rids
+
+    Assert.True(Array.forall2 compareTwoRecords inputRecords outputRecords)
+    printfn "All %A records successfully inserted and read" count
+
+    // Delete file
+    File.Delete (fileName)
 
     ()
