@@ -1,0 +1,23 @@
+Records will be stored in pages of size 4096. Records are inserted into a file by RBFM.
+
+2. Record Format
+|num_attrs|null_flags|end_offset_1|end_offset_2|...|end_offset_|f_1|f_2|...|f_n|
+
+2. Page Format
+Pages will have records compacted into the top of the page, with slot directory compacted to the bottom of the page.
+
+|record_1|record_2|...|record_n|free space|record_n offset|record_n length|...|record_2 offset|record_2 length|record_1 offset|record_1 length|num_records|free space offset|
+
+Number of pages in a file is determined by taking total number of bytes and dividing by page size
+
+Record is forwarded if offset is negative, which means instead of reading offset and length, read PageNum and SlotNum to find forwarded record.
+
+
+My personal todo
+- Create file DONE
+- RBFM
+  - Create new page DONE
+  - Insert record   DONE
+  - Read record     DONE
+  - Update record
+  - Delete record
