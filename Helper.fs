@@ -13,8 +13,10 @@ let createTestRecordDescriptor (): Attr array =
     [| attr1; attr2; attr3; attr4 |]
 
 let createSmallRecords (count: int) =
+    let maxVarCharSize = 4000
     let createRecord (i: int) =
-        [| String (String.replicate i "Name"); Int i; Float (float32 i * 0.2f); Int (100*i) |]
+        let name = String.replicate i "Name"
+        [| String (name.Substring(0, min name.Length maxVarCharSize)); Int i; Float (float32 i * 0.2f); Int (100*i) |]
     Array.map createRecord [| for i in 1 .. count -> i |]
 
 let compareTwoRecords (record1: Value array) (record2: Value array) =

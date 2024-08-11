@@ -91,3 +91,37 @@ let ``Insert Many Records`` () =
     File.Delete (fileName)
 
     ()
+
+[<Fact>]
+let ``Update Records to be same size`` () =
+    let fileName = "testfile.txt"
+    let rbfm = RecordBasedFileManager.Instance
+    let fileHandle = FileHandle(fileName)
+    File.Delete (fileName)
+
+    // Create record based file
+    rbfm.createFile(fileName)
+
+    let count = 1000
+    let attributes = createTestRecordDescriptor()
+    let inputRecords = createSmallRecords (count)
+    let rids = Array.map (rbfm.insertRecord fileHandle attributes) inputRecords
+
+    // let outputRecords = Array.map (rbfm.readRecord fileHandle attributes) rids
+    let updateRecord (record: Value array) =
+        let firstPartOfRecord = Array.sub record 0 (record.Length - 1)
+        let newValue = Int 200
+        Array.concat [firstPartOfRecord; [| newValue |]]
+
+    let updatedInputRecords = Array.map updateRecord inputRecords
+
+    // update records
+    Array.map2 (fun rid newRecord -> rbfm.updateRecord fileHandle attributes newRecord rid) rids updatedInputRecords |> ignore
+
+    let outputRecords = Array.map (rbfm.readRecord fileHandle attributes) rids
+
+    Assert.True(Array.forall2 compareTwoRecords updatedInputRecords outputRecords)
+    printfn "All %A records successfully inserted, updated and read" count
+
+    // Delete file
+    File.Delete (fileName)
