@@ -92,8 +92,7 @@ let ``Insert Many Records`` () =
 
     ()
 
-[<Fact>]
-let ``Update Records to be same size`` () =
+let updateRecordsTest (updateRecord: Value array -> Value array) =
     let fileName = "testfile.txt"
     let rbfm = RecordBasedFileManager.Instance
     let fileHandle = FileHandle(fileName)
@@ -107,12 +106,6 @@ let ``Update Records to be same size`` () =
     let inputRecords = createSmallRecords (count)
     let rids = Array.map (rbfm.insertRecord fileHandle attributes) inputRecords
 
-    // let outputRecords = Array.map (rbfm.readRecord fileHandle attributes) rids
-    let updateRecord (record: Value array) =
-        let firstPartOfRecord = Array.sub record 0 (record.Length - 1)
-        let newValue = Int 200
-        Array.concat [firstPartOfRecord; [| newValue |]]
-
     let updatedInputRecords = Array.map updateRecord inputRecords
 
     // update records
@@ -125,3 +118,29 @@ let ``Update Records to be same size`` () =
 
     // Delete file
     File.Delete (fileName)
+
+[<Fact>]
+let ``Update Records to be same size`` () =
+    let updateRecord (record: Value array) =
+        let firstPartOfRecord = Array.sub record 0 (record.Length - 1)
+        let newValue = Int 200
+        Array.concat [firstPartOfRecord; [| newValue |]]
+    updateRecordsTest updateRecord
+
+[<Fact>]
+let ``Update Records to be smaller`` () =
+    let updateRecord (record: Value array) =
+        let lastPartOfRecord = Array.sub record 1 (record.Length - 1)
+        let newValue = String ""
+        Array.concat [[| newValue |]; lastPartOfRecord]
+
+    updateRecordsTest updateRecord
+
+[<Fact>]
+let ``Update Records to be larger`` () =
+    let updateRecord (record: Value array) =
+        let lastPartOfRecord = Array.sub record 1 (record.Length - 1)
+        let newValue = String (String.replicate 4000 "a")
+        Array.concat [[| newValue |]; lastPartOfRecord]
+
+    updateRecordsTest updateRecord
