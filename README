@@ -12,12 +12,15 @@ Number of pages in a file is determined by taking total number of bytes and divi
 
 Record is forwarded if offset is negative, which means instead of reading offset and length, read PageNum and SlotNum to find forwarded record.
 
+Record Deletion: To delete a record, set both offset and length in slot directory to 0.
 
 My personal todo
 - Create file DONE
 - RBFM
-  - Create new page DONE
-  - Insert record   DONE
-  - Read record     DONE
-  - Update record
+  - Create new page       DONE
+  - Insert record         DONE
+  - Read record           DONE
+  - Update record         1/2
   - Delete record
+  - Add catalog
+  - Implement naive scan

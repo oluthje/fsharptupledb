@@ -162,7 +162,7 @@ module RecordBasedFileManagerModule =
 
             let recordFitsInPage =
                 let freeSpace = freeSpaceInPage page
-                serializedRecord.Length <= previousRecordLength || freeSpace - 8 - serializedRecord.Length >= 0
+                serializedRecord.Length <= previousRecordLength || (freeSpace + previousRecordLength) - 8 - serializedRecord.Length >= 0
 
             let recordOffset = findRecordOffset rid.SlotNum page
             let recordLength = findRecordLength rid.SlotNum page
@@ -190,10 +190,12 @@ module RecordBasedFileManagerModule =
                         let newOffset = recordsBeforeRecord.Length + recordsAfterRecord.Length
                         let newLength = serializedRecord.Length
                         Array.concat [convertIntToBytes newOffset; convertIntToBytes newLength]
-                    else
+                    else if slotNum > rid.SlotNum then
                         let newOffset = convertBytesToInt (Array.sub slot 0 4) - previousRecordLength
                         let oldLength = Array.sub slot 4 4
                         Array.concat [convertIntToBytes newOffset; oldLength]
+                    else
+                        slot
                 let newSlotBytes = Array.fold (fun bytes -> Array.append bytes) [||] (Array.mapi updateSlots slots)
                 // for each old slot that is not rid.SlotNum, decrease slot offset by oldRecordSize
 
@@ -202,7 +204,7 @@ module RecordBasedFileManagerModule =
                 let newPage = Array.concat [recordsBeforeRecord; recordsAfterRecord; serializedRecord; (Array.zeroCreate freeSpace); newSlotBytes; convertIntToBytes numberOfRecords; convertIntToBytes newFreeSpaceOffset]
                 fileHandle.writePage rid.PageNum newPage
 
-            // case 1: record stays the same size
+            // case 1: updated record fits in page
             if serializedRecord.Length = previousRecordLength then
                 updateRecordInPage()
             else if serializedRecord.Length < previousRecordLength then
@@ -211,15 +213,16 @@ module RecordBasedFileManagerModule =
                 if recordFitsInPage then
                     updateRecordInPage()
                 else
+                    // case 2: record grows
                     // let recordOffset = findRecordOffset rid.SlotNum page
                     // let recordLength = findRecordLength rid.SlotNum page
                     // remove old record
                     let recordsBeforeRecord = Array.sub page 0 recordOffset
-                    printfn "startIndex: %A" (recordOffset + recordLength)
-                    printfn "freeSpaceOffset: %A" freeSpaceOffset
-                    printfn "recordsBeforeRecord: %A" recordsBeforeRecord.Length
-                    printfn "recordLength: %A" recordLength
-                    printfn "count: %A" (freeSpaceOffset - recordsBeforeRecord.Length - recordLength)
+                    // printfn "startIndex: %A" (recordOffset + recordLength)
+                    // printfn "freeSpaceOffset: %A" freeSpaceOffset
+                    // printfn "recordsBeforeRecord: %A" recordsBeforeRecord.Length
+                    // printfn "recordLength: %A" recordLength
+                    // printfn "count: %A" (freeSpaceOffset - recordsBeforeRecord.Length - recordLength)
                     let recordsAfterRecord = Array.sub page (recordOffset + recordLength) (freeSpaceOffset - recordsBeforeRecord.Length - recordLength)
                     // need to do forwarding here.
                     let ridForForwarding = this.insertRecord fileHandle recordDescriptor values
@@ -248,14 +251,40 @@ module RecordBasedFileManagerModule =
                     let newPage = Array.concat [recordsBeforeRecord; recordsAfterRecord; (Array.zeroCreate freeSpace); newSlotBytes; convertIntToBytes numberOfRecords; convertIntToBytes newFreeSpaceOffset]
                     fileHandle.writePage rid.PageNum newPage
 
-
-
-            // case 3: record increased in size
-            // -if there is sufficient space in the page, simply follow steps under case 2
-            // -if no space, then put record in next available page. Set old slot to point to the page where record has been moved to
-
-
             ()
+        // need to find a function to encapsulate this compacting of records
+
+        member this.deleteRecord(fileHandle: FileHandle) (rid: RID) =
+            let page = fileHandle.readPage(rid.PageNum)
+            let numberOfRecords = getNumberOfRecordsFromPage(page)
+            let freeSpaceOffset = getFreeSpaceOffsetFromPage(page)
+            let previousRecordLength = findRecordLength rid.SlotNum page
+
+            let recordOffset = findRecordOffset rid.SlotNum page
+            let recordLength = findRecordLength rid.SlotNum page
+            let recordsBeforeRecord = Array.sub page 0 recordOffset
+            let recordsAfterRecord = Array.sub page (recordOffset + recordLength) (freeSpaceOffset - recordsBeforeRecord.Length - recordLength)
+            let currentSlotBytes = getSlotsBytes page numberOfRecords
+            let slots = Array.chunkBySize 8 currentSlotBytes
+
+            let updateSlots (index: int) (slot: byte array) =
+                let slotNum = numberOfRecords - index
+                if slotNum = rid.SlotNum then
+                    // set record's slot values to 0 to indicate a deletion
+                    let newOffset = 0
+                    let newLength = 0
+                    Array.concat [convertIntToBytes newOffset; convertIntToBytes newLength]
+                else if slotNum > rid.SlotNum then
+                    let newOffset = convertBytesToInt (Array.sub slot 0 4) - previousRecordLength
+                    let oldLength = Array.sub slot 4 4
+                    Array.concat [convertIntToBytes newOffset; oldLength]
+                else
+                    slot
+            let newSlotBytes = Array.fold (fun bytes -> Array.append bytes) [||] (Array.mapi updateSlots slots)
+            let newFreeSpaceOffset = freeSpaceOffset - previousRecordLength
+            let freeSpace = calculateNewFreeSpace (recordsBeforeRecord.Length + recordsAfterRecord.Length) (0) (0) (newSlotBytes.Length)
+            let newPage = Array.concat [recordsBeforeRecord; recordsAfterRecord; (Array.zeroCreate freeSpace); newSlotBytes; convertIntToBytes numberOfRecords; convertIntToBytes newFreeSpaceOffset]
+            fileHandle.writePage rid.PageNum newPage
 
         member this.readRecord(fileHandle: FileHandle) (recordDescriptor: Attr array) (rid: RID): Value array =
             let page = fileHandle.readPage(rid.PageNum)
@@ -264,7 +293,10 @@ module RecordBasedFileManagerModule =
             let recordOffset = findRecordOffset rid.SlotNum page
             let recordLength = findRecordLength rid.SlotNum page
 
-            if recordOffset < 0 then
+            if recordOffset = 0 && recordLength = 0 then
+                // this indicates that the record has been deleted
+                [||]
+            else if recordOffset < 0 then
                 let forwardingRID = { PageNum = -recordOffset; SlotNum = recordLength }
                 this.readRecord fileHandle recordDescriptor rid
             else

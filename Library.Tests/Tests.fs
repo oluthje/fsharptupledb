@@ -144,3 +144,44 @@ let ``Update Records to be larger`` () =
         Array.concat [[| newValue |]; lastPartOfRecord]
 
     updateRecordsTest updateRecord
+
+[<Fact>]
+let ``Delete Records`` () =
+    let fileName = "testfile.txt"
+    let rbfm = RecordBasedFileManager.Instance
+    let fileHandle = FileHandle(fileName)
+    File.Delete (fileName)
+
+    // Create record based file
+    rbfm.createFile(fileName)
+
+    let count = 2
+    let attributes = createTestRecordDescriptor()
+    let inputRecords = createSmallRecords (count)
+    let rids = Array.map (rbfm.insertRecord fileHandle attributes) inputRecords
+
+    let outputRecords = Array.map (rbfm.readRecord fileHandle attributes) rids
+
+    Assert.True(Array.forall2 compareTwoRecords inputRecords outputRecords)
+    printfn "All %A records successfully inserted and read" count
+
+    printfn "A"
+
+    // Delete records
+    Array.iter (fun rid -> rbfm.deleteRecord fileHandle rid) rids
+
+    printfn "B"
+
+    let outputRecords = Array.map (rbfm.readRecord fileHandle attributes) rids
+
+    printfn "C"
+
+    Assert.True(Array.forall (fun record -> record = [||]) outputRecords)
+    printfn "All %A records successfully deleted" count
+
+    // Delete file
+    File.Delete (fileName)
+
+    printfn "D"
+
+    ()
